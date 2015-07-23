@@ -250,7 +250,6 @@ func (e *Exporter) setMetrics(services <-chan []*consul_api.ServiceEntry, checks
 				}
 
 				log.Infof("%v/%v status is %v", entry.Service.Service, entry.Node.Node, passing)
-				log.Infof("%v/%v status is %v", entry.Service.Tags, entry.Node.Node, passing)
 
 				e.serviceNodesHealthy.WithLabelValues(entry.Service.Service, strings.Join(entry.Service.Tags, ","), entry.Node.Node).Set(float64(passing))
 			}
