@@ -6,6 +6,7 @@ import (
 	_ "net/http/pprof"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,12 +31,12 @@ type Exporter struct {
 	URI   string
 	mutex sync.RWMutex
 
-	up, clusterServers                                 prometheus.Gauge
-	nodeCount, serviceCount                            prometheus.Counter
+	up, clusterServers                                            prometheus.Gauge
+	nodeCount, serviceCount                                       prometheus.Counter
 	serviceNodesTotal, serviceNodesHealthy, nodeChecks, keyValues *prometheus.GaugeVec
-	client                                             *consul_api.Client
-	kvPrefix                                          string
-	kvFilter                                          *regexp.Regexp
+	client                                                        *consul_api.Client
+	kvPrefix                                                      string
+	kvFilter                                                      *regexp.Regexp
 }
 
 // NewExporter returns an initialized Exporter.
@@ -78,7 +79,7 @@ func NewExporter(uri string, kvPrefix string, kvFilter string) *Exporter {
 				Name:      "catalog_service_nodes",
 				Help:      "Number of nodes currently registered for this service.",
 			},
-			[]string{"service"},
+			[]string{"service", "tags"},
 		),
 
 		serviceNodesHealthy: prometheus.NewGaugeVec(
@@ -87,7 +88,7 @@ func NewExporter(uri string, kvPrefix string, kvFilter string) *Exporter {
 				Name:      "catalog_service_node_healthy",
 				Help:      "Is this service healthy on this node?",
 			},
-			[]string{"service", "node"},
+			[]string{"service", "tags", "node"},
 		),
 
 		nodeChecks: prometheus.NewGaugeVec(
@@ -232,7 +233,7 @@ func (e *Exporter) setMetrics(services <-chan []*consul_api.ServiceEntry, checks
 			}
 
 			// We should have one ServiceEntry per node, so use that for total nodes.
-			e.serviceNodesTotal.WithLabelValues(service[0].Service.Service).Set(float64(len(service)))
+			e.serviceNodesTotal.WithLabelValues(service[0].Service.Service, strings.Join(service[0].Service.Tags, "")).Set(float64(len(service)))
 
 			for _, entry := range service {
 				// We have a Node, a Service, and one or more Checks. Our
@@ -249,8 +250,9 @@ func (e *Exporter) setMetrics(services <-chan []*consul_api.ServiceEntry, checks
 				}
 
 				log.Infof("%v/%v status is %v", entry.Service.Service, entry.Node.Node, passing)
+				log.Infof("%v/%v status is %v", entry.Service.Tags, entry.Node.Node, passing)
 
-				e.serviceNodesHealthy.WithLabelValues(entry.Service.Service, entry.Node.Node).Set(float64(passing))
+				e.serviceNodesHealthy.WithLabelValues(entry.Service.Service, strings.Join(entry.Service.Tags, ","), entry.Node.Node).Set(float64(passing))
 			}
 		case entry, b := <-checks:
 			running = b
